@@ -1,0 +1,86 @@
+ ##Input Script##
+variable   dia1 equal 1
+variable   dia2 equal 1
+variable   seed equal 5008
+variable   tstep equal  .000001
+variable   rstep equal 1.5/${tstep}
+
+#Set the dimensionality of the simulation.
+dimension 	2
+units lj
+#Sphere is used for granular models.  
+#Args: diameter, mass, angular velocity 
+atom_style	sphere
+# Define boundary condition
+# This command cannot be used after the simulation box is defined by a 
+# read_data or create_box command or #read_restart command. 
+# For 2d simulations, the z dimension must be periodic.  
+boundary    f m p
+# Setting the pairwise newton flag to off means that if two interacting atoms 
+# are on different processors, both processors compute #their interaction and 
+# the resulting force information is not communicated. 
+# LAMMPS should produce the same answers for any newton flag settings, except for round-off issues. 
+# The newton bond setting cannot be changed after the simulation box is defined by a read_data or create_box command. 
+newton   	off
+# mean communicate velocity info with ghost atoms 
+comm_modify    vel yes
+# define 2D box region. It is  geometric region of space. 
+region		box block 0 10 0 15 -1.5 1.5 units box
+# create the simulation box with one type of particle, based on the specified region.  
+# Thus a region command must first be used to define a geometric domain.  
+create_box 2 box
+# This command sets parameters that affect the building of pairwise neighbor lists.
+neighbor    0.2 bin
+# delay or every or check or once or cluster or include or exclude or page or one or binsize
+neigh_modify    delay 0
+
+#time step of integrator
+timestep	${tstep}
+
+## Inserting particles -----------------------------------------------------------
+# # # Lattice stucture
+lattice 	    sq 1 origin 0.5 0.5 0.0
+region          slab block 0 10 0 10  -.5 .5 units box
+create_atoms    1 region slab units box
+set             type 1 diameter ${dia1}
+
+# region          slab block 0 10 0 10  -.5 .5 units box
+# fix       ins all pour 100 1 ${seed} vol .1 100 diam one ${dia1} region slab vel -10 10 0 rate 0.0
+group mobile type 1
+
+# pair_style		gran/hooke 1e5 NULL 100.0 NULL 0.5 0
+# pair_coeff    	* *
+pair_style lj/cut 1
+pair_coeff * * .02 1
+
+# Operations
+#Perform constant NVE integration to update position, velocity, and angular velocity for finite-size #spherical particles in the group each timestep
+fix		nve_int all nve/sphere
+# Impose an additional acceleration on each particle in the group. (180 for -y direction)
+fix		gravity_ mobile gravity .001 spherical 0.0 180.0
+
+# Periodic, wall only at bottom
+fix 	wall all wall/gran/region hooke/history 1e5 NULL 1000.0 NULL 0.5 0 region box
+
+#put z=0 all the time
+fix 	2d  all enforce2d
+
+
+compute     1 all property/local patom1 patom2 ptype1 ptype2
+compute 	2 all pair/local dist eng fx fy fz #p1 p2 p3
+
+# compute the total energy
+compute	  Rke all erotate/sphere
+compute   TKe all ke
+compute   Pe all pe
+compute         c1 all ke/atom
+compute         c2 all pe/atom
+variable  E  equal c_TKe+c_Pe+c_Rke
+variable  ke atom "vx*vx+vy*vy+vz*vz"
+variable  t equal "step*dt"
+thermo          1
+thermo_style    custom atoms v_t step temp pe ke etotal ecouple econserve
+thermo_modify   lost ignore norm no
+dump   	        1 all custom 1 gran_energy_sys.du id type x y z radius vx vy vz fx fy fz c_c1 c_c2
+fix             11 all nve
+run             ${rstep}

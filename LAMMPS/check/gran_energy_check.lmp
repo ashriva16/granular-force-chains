@@ -1,0 +1,141 @@
+variable    disorder equal ${D}
+variable	dia1 equal 1+${disorder}
+variable	dia2 equal 1-${disorder}
+variable    dia12 equal  (${dia1}+${dia2})/2
+variable    sigma_3b equal  (1+${dia1})/2
+variable    sigma_3a equal  (1+${dia2})/2
+variable    alpha equal  1.1
+variable 	r_cut_a equal ${dia1}*${alpha}
+variable 	r_cut_b equal ${dia2}*${alpha}
+variable 	r_cut_ab equal ${dia12}*${alpha}
+variable 	r_cut_3b equal ${sigma_3b}*${alpha}
+variable 	r_cut_3a equal ${sigma_3a}*${alpha}
+variable    radsum equal .5*((${dia1}+${dia2})/2-.25)
+variable    angle equal 180*(PI/180)
+variable	radsumx equal ${radsum}*cos(${angle})
+variable	radsumy equal ${radsum}*sin(${angle})
+variable    t equal "step*dt"
+
+ ##Input Script##
+boundary        p p p
+dimension 	    2
+atom_style      sphere
+units           lj
+lattice         sq 3.567
+region		    box block -10 10 -10 15 -1.5 1.5 units box
+atom_modify     map     array
+neighbor        2.0 nsq
+create_box      3 box
+comm_modify    vel yes
+create_atoms    1 single 0 0 0 units box
+create_atoms    2 single ${radsumx} ${radsumy} 0 units box
+# create_atoms    3 single 5 0 0 units box
+
+set             type 1 diameter ${dia1}
+set             type 2 diameter ${dia2}
+# set             type 3 diameter 5
+
+variable        tstep equal  .000001
+variable        rstep equal .01/${tstep}
+timestep        ${tstep}
+#put z=0 all the time
+# fix 	2d  all enforce2d
+
+# fix			gravity_ all gravity 10 spherical 0.0 180.0
+# fix 	        wall all wall/gran/region hooke 1e5 NULL 100.0 NULL 0.5 0 region box
+# fix 	        wall all wall/gran hooke 1e5 NULL 1000.0 NULL 0 1 yplane -10.0 NULL
+
+## --------------------------------------------------------------------------
+# pair_style      lj/cut 1
+# pair_coeff      * * 1.0 1.0
+# pair_style		gran/hooke 1e5 NULL 1000.0 NULL 0.5 0
+# pair_coeff    	* *
+# pair_style		gran/hooke 1e5 0 0 0 0 0
+# pair_coeff    	* *
+# pair_style        python 2.5
+# pair_coeff        * * py_pot2.customhooke lj1 lj2 lj2
+# Size while using custom hooke will not matter as everything is 
+
+# pair_style table linear 2000
+# pair_coeff 1 1 hooke11.table ENTRY1 1.65
+# pair_coeff 1 2 hooke12.table ENTRY1	1.1
+# pair_coeff 2 2 hooke22.table ENTRY1 .55
+
+# pair_style python 1.1
+# pair_coeff * * py_pot2.customhooke lj1 lj2
+# shell rm hooke11.table
+# shell rm hooke12.table
+# shell rm hooke22.table
+# pair_write  1 1 2000000 r 0.000001 ${r_cut_a} hooke11.table ENTRY1
+# pair_write  1 2 2000000 r 0.000001 ${r_cut_ab} hooke12.table ENTRY1
+# pair_write  2 2 2000000 r 0.000001 ${r_cut_b} hooke22.table ENTRY1
+# pair_style table linear 2000000
+# pair_coeff 1 1 hooke11.table ENTRY1 
+# pair_coeff 1 2 hooke12.table ENTRY1	
+# pair_coeff 2 2 hooke22.table ENTRY1 
+
+pair_style python 2
+pair_coeff * * py_pot2.customhooke lj1 lj2 lj3
+shell rm hooke11.table
+shell rm hooke22.table
+shell rm hooke33.table
+shell rm hooke12.table
+shell rm hooke13.table
+shell rm hooke23.table
+pair_write  1 1 2000001 r 0.1 ${r_cut_a} hooke11.table ENTRY1
+pair_write  2 2 2000001 r 0.1 ${r_cut_b} hooke22.table ENTRY1
+pair_write  3 3 2000001 r 0.00001 1 hooke33.table ENTRY1
+pair_write  1 2 2000001 r 0.1 ${r_cut_ab} hooke12.table ENTRY1
+pair_write  1 3 2000001 r 0.00001 ${r_cut_3a} hooke13.table ENTRY1
+pair_write  2 3 2000001 r 0.00001 ${r_cut_3b} hooke23.table ENTRY1
+pair_style table linear 2000001
+pair_coeff 1 1 hooke11.table ENTRY1
+pair_coeff 2 2 hooke22.table ENTRY1
+pair_coeff 3 3 hooke33.table ENTRY1
+pair_coeff 1 2 hooke12.table ENTRY1
+pair_coeff 1 3 hooke13.table ENTRY1
+pair_coeff 2 3 hooke23.table ENTRY1
+
+## --------------------------------------------------------------------------
+
+# group           myatom id 2
+# velocity        myatom set 0.0 -50.0 0 units box
+# variable        dimerdistancex equal x[2]-x[1]
+# variable        dimerdistancey equal y[2]-y[1]
+variable        dimerdistance equal sqrt((x[2]-x[1])^2+(y[2]-y[1])^2)
+
+## --------------------------------------------------------------------------
+# Setup output
+thermo          1
+thermo_style    custom atoms v_dimerdistance v_t step temp pe ke etotal ecouple econserve
+thermo_modify   lost ignore norm no
+# compute         10 all pressure thermo_temp
+# compute	        Rke all erotate/sphere
+# compute         sys_pe all pe
+compute         c1 all ke/atom
+compute         c2 all pe/atom
+compute         3 all centroid/stress/atom NULL
+compute         1 all property/local patom1 patom2 ptype1 ptype2
+compute 	    2 all pair/local dist eng fx fy fz #p1 p2 p3
+
+# dump   	        1 all custom 1 visualize.du id type x y z radius vx vy vz fx fy fz c_c1 c_c2
+dump   	        1 all custom 1 visualize.du &
+								id type radius &
+								x y z &
+								vx vy vz &
+								fx fy fz & 
+								c_c1 c_c2 &
+								c_3[1] c_3[2] c_3[3] c_3[4] c_3[5] c_3[6]
+dump 	        2 all local 1 dump.neigh index c_1[1] c_1[2] &
+										            c_2[1] c_2[2] &
+										            c_2[3] c_2[4] c_2[5] &
+
+## --------------------------------------------------------------------------
+fix             11 all nve
+run             ${rstep}
+
+# fix				nvt_int all nvt/sphere temp 1e-20 1e-20 .10
+# run             ${rstep}
+# min_modify		dmax .0001 line quadratic
+# min_style quickmin	
+# minimize		0  0  100000  1000000

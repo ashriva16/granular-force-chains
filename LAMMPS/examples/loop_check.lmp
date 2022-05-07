@@ -1,0 +1,50 @@
+dimension     2
+boundary      p m p
+
+atom_style    sphere
+neighbor      0.3 bin
+neigh_modify  delay 5
+
+# create geometry
+
+lattice	      hex 0.9
+region	      sbox block 0 20 0 30 -0.25 0.25
+create_box    3 sbox
+region	      box block 0 20 0 10 -0.25 0.25
+create_atoms  1 region box units box
+
+# variable myTemp equal temp
+# label loop
+# variable a loop 1000
+# run 1000
+# if "${myTemp} < 300.0" then "jump SELF break"
+# next a
+# jump SELF loop
+# label break
+# print "ALL DONE"
+
+# variable        x equal 0
+# print           $x
+
+# variable        n loop 10
+# label           loop
+#   variable      x_old equal $x+1    # key line
+#   variable      x equal $x+1    # key line
+#   print         $x
+#   next          n
+#   jump          SELF loop
+
+# variable        n loop 10
+# label           loop
+#   variable      x_old equal $x    # key line
+#   print         "$n $x ${x_old}"
+#   if "$n >= 5" then &
+#     "variable  x equal $x-1" &
+#     "next n" &
+#     "jump SELF loop" &
+#   elif "$n < 5" &
+#     "next n" &
+#     "variable x equal $x+1" &
+#     "jump SELF loop"
+# label break
+# print "ALL DONE"

@@ -1,0 +1,193 @@
+## Defining global variables -----------------------------------------------------
+variable    disorder equal ${D}
+variable	dia1 equal 1+${disorder}
+variable	dia2 equal 1-${disorder}
+variable	seed equal 5008
+variable	tstep equal  .0001
+variable	savestep equal .1/${tstep}
+variable	rstep equal 10/${tstep}
+variable	F equal .5
+
+variable   	n equal  50  # Total number will be NXN
+variable   	TN equal ${n}*${n}
+variable 	a equal  1
+variable 	c equal  2/(sqrt(3)*($a^2))
+variable   	lx equal ($n-.5)*$a
+variable	Level equal (2*${n}^2)/(2*${n}-1)  # Even number of levels
+variable   	ily equal ${a}*(${Level}-1)*sqrt(3)/2
+## --------------------------------------------------------------------------------
+
+## Define Domain ------------------------------------------------------------------
+###Set the dimensionality of the simulation.
+dimension 	2
+units lj
+###Sphere is used for granular models.  
+###Args: diameter, mass, angular velocity 
+atom_style	sphere
+### Define boundary condition
+### This command cannot be used after the simulation box is defined by a 
+### read_data or create_box command or #read_restart command. 
+### For 2d simulations, the z dimension must be periodic.  
+boundary    f fs p
+### Setting the pairwise newton flag to off means that if two interacting atoms 
+### are on different processors, both processors compute #their interaction and 
+### the resulting force information is not communicated. 
+### LAMMPS should produce the same answers for any newton flag settings, except for round-off issues. 
+### The newton bond setting cannot be changed after the simulation box is defined by a read_data or create_box command. 
+newton   	off
+### mean communicate velocity info with ghost atoms 
+comm_modify    vel yes
+### define 2D box region. It is  geometric region of space. 
+variable     sw equal 2*${ily}
+region		box block 0 ${lx} 0 ${sw} -1.5 1.5 units box
+### create the simulation box with one type of particle, based on the specified region.  
+### Thus a region command must first be used to define a geometric domain.  
+create_box 3 box
+### This command sets parameters that affect the building of pairwise neighbor lists.
+neighbor    0.2 bin
+### delay or every or check or once or cluster or include or exclude or page or one or binsize
+neigh_modify    delay 0
+
+### Periodic, All side
+# fix 	wall all wall/gran/region hooke 1e5 0 0 0 0 0 region box
+
+### Periodic, wall only at bottom
+variable lo equal xlo
+variable hi equal xhi
+fix 	ylower all wall/gran hooke 1e5 0 0 0 0 0 yplane 0.0 NULL
+fix 	xlower all wall/gran hooke 1e5 0 0 0 0 0 xplane ${lo} NULL
+fix 	xhigher all wall/gran hooke 1e5 0 0 0 0 0 xplane ${hi} NULL
+
+### Impose an additional acceleration on each particle in the group. (180 for -y direction)
+fix		gravity_ all gravity 10 spherical 0.0 180.0
+fix_modify gravity_ energy yes
+## --------------------------------------------------------------------------------
+
+## Inserting particles -----------------------------------------------------------
+### Lattice stucture
+lattice 	    hex ${c} origin 0.5 0.8 0.0
+region          slab block 0.5 ${lx} 0.0 ${ily} -.5 .5 units box
+
+# variable   	    a equal ${dia2}
+# lattice 	    sq $a origin 0.5 0.5 0.0
+# region          slab block 0 ${lx} 0 ${ily} -.5 .5 units box
+
+create_atoms    1 region slab units box
+
+### Random Insertion (Settle time needs to be increased)
+# create_atoms    1 random ${TN} ${seed} box
+
+### Random Pour
+# region    INslab block 1 ${lx} ${ly} ${ily} -.5 .5 units box
+# fix       ins all pour 100 1 ${seed} vol 1 100 diam one ${dia1} region INslab vel -10 10 0 rate 0.0
+## --------------------------------------------------------------------------------
+
+## Particle Interaction Functions -------------------------------------------------
+group 			mobile type 1
+set				group mobile type/fraction 2 ${F} 12345
+set             type 1 diameter ${dia1}
+set             type 2 diameter ${dia2}
+# pair_style		gran/hooke 1e5 NULL 100.0 NULL 0.5 0
+pair_style		gran/hooke 1e5 0 0 0 0.5 0
+pair_coeff    	* *
+## --------------------------------------------------------------------------------
+
+## Integrator ---------------------------------------------------------------------
+timestep	${tstep}
+#put z=0 all the time
+fix 			2d  all enforce2d
+fix 			nve_int all nve/sphere
+# fix             3 all langevin 1e-20 1e-20 1000.0 699483
+# fix				nve_int all nvt/sphere temp 1e-20 1e-20 100.0
+## --------------------------------------------------------------------------------
+
+## Output Setup -------------------------------------------------------------------
+variable        t equal "step*dt"
+thermo	        ${savestep}
+# pe is per atom in thermo
+thermo_style    custom atoms v_t step temp pe ke etotal ecouple econserve xlo xhi ylo yhi
+# thermo_modify   lost ignore
+compute         c1 all ke/atom
+compute         c2 all pe/atom
+compute         3 mobile stress/atom NULL
+compute         1 mobile property/local patom1 patom2 ptype1 ptype2
+compute 	    2 mobile pair/local dist eng fx fy fz #p1 p2 p3
+dump   	        1 all custom ${savestep} visualize.du &
+								id type radius &
+								x y z &
+								vx vy vz &
+								fx fy fz & 
+								c_c1 c_c2 &
+								c_3[1] c_3[2] c_3[3] c_3[4] c_3[5] c_3[6]
+dump 	        2 mobile local ${savestep} dump.neigh index c_1[1] c_1[2] &
+										            c_2[1] c_2[2] &
+										            c_2[3] c_2[4] c_2[5]
+## Output Setup -------------------------------------------------------------------
+run ${rstep}
+## Indenter Setup ----------------------------------------------------------------
+# run 		  1
+thermo	        1000
+dump_modify     1 every 1000
+dump_modify     2 every 1000
+
+variable      	k equal 5e5/xlat
+variable      	r equal lx/2
+variable 		v equal (xhi+xlo)/2
+variable 		x equal $v
+
+### Navie Displacement Controlled Indenter (good when minimisation is required)
+# variable		i equal .2
+# variable 		v equal yhi
+# variable 		y0 equal $v+$r-$i
+# variable		s equal step-${rstep}
+# fix           	4 all indent $k sphere $x ${y0} 0 $r units box
+# variable		indent_force equal f_4[2]
+# thermo_style  	custom v_s atoms v_y0 yhi v_i v_indent_force v_t temp pe ke etotal
+# run 			1000000
+# print 			"${y0} ${indent_force} $i"
+
+### Moving Displacement Controlled Indenter (good when nve/nvt integration is required)
+# variable        i equal 0
+# variable 		v equal yhi
+# variable 		y0 equal $v
+# variable 		insert equal .2
+# label loopa
+#     variable      y equal ${y0}+$r-$i   # key line
+#     fix           4 all indent $k sphere $x $y 0 $r units box
+#     variable      indent_force equal f_4[2]
+#     thermo_style  custom atoms step v_y0 v_i v_indent_force v_t temp pe ke etotal
+#     run 1
+# 	print 		  "printed ${indent_force} $i $a"
+#     if "$i < ${insert}" then &
+#         "print 'Running'" &
+#         "variable i equal $i+.01" & 
+#         "jump SELF loopa" &
+#     else &
+#         "print 'ALL DONE'" &
+#         "jump SELF break"
+# label break
+# run 10000000
+# print "Final ${indent_force} $i"
+
+### Force-Displacement Controlled Indenter Highly unstable
+# variable        i equal 0
+# variable 		v equal yhi
+# variable 		y0 equal $v
+# variable 		force equal 3995.8608
+# label loopa
+#     variable      y equal ${y0}+$r-$i   # key line
+#     fix           4 all indent $k sphere $x $y 0 $r units box
+#     variable      indent_force equal f_4[2]
+#     variable      a equal abs(${indent_force}-${force})
+#     thermo_style  custom step atoms v_a v_indent_force v_i v_t temp pe ke etotal
+#     run 10000
+# 	print 		  "printed ${indent_force} $i $a"
+#     if "$a > 1" then &
+#         "print 'Running'" &
+#         "variable i equal $i-(${indent_force}-${force})*.0001" & 
+#         "jump SELF loopa" &
+#     else &
+#         "print 'ALL DONE'" &
+#         "jump SELF break"
+# label break
+# print "Final ${indent_force} $i"

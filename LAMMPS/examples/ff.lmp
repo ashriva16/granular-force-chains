@@ -1,0 +1,108 @@
+###A-indentation
+
+units 		metal
+atom_style 	 atomic
+boundary 		p m p
+neighbor	0.3 bin
+neigh_modify	delay 5
+
+variable		a0      equal  3.6327
+lattice 		fcc     ${a0} 
+
+region 		box     block -20 20 -20 20 -20 20 units lattice
+create_box 	4       box
+region work_new block -20 20 -18.44 0 -20 20 
+region work_thermo  block -20 20 -19.27 -18.44 -20 20
+region work_boundary block -20 20 -20 -19.27 -20 20
+region work union 3 work_new work_thermo work_boundary
+region work_mobile union 2 work_new work_thermo
+create_atoms   1      region  work
+
+group w_new region work_new
+group w_thermo region work_thermo
+group w_boundary region work_boundary
+group w_mobile region work_mobile
+
+#indenter
+lattice diamond 3.5658
+region         indenter   sphere 0 2.1035 0 1.965   units lattice      ###rad =2nm
+create_atoms 2 region indenter 
+
+group indenter region indenter
+
+mass		1 63.215
+mass	    2 63.215
+mass		3 63.215
+mass		4 12.011
+
+set group w_new type 1
+set group w_thermo type 2 
+set group w_boundary type 3
+set group indenter type 4 
+
+pair_style hybrid tersoff eam morse 2.5658
+pair_coeff * * tersoff SiC.tersoff NULL NULL NULL  C  
+pair_coeff 1*3 4 morse 0.1063 1.8071 2.3386           # pair_coeff 1 2 D alfa ro 
+pair_coeff 1*3 1*3 eam Cu_u3.eam   
+
+# initial velocities and thermostat layer
+compute	  	new w_mobile temp
+velocity	w_mobile create 300 482748 temp new
+fix		1 all nve
+fix		2 w_boundary setforce 0.0 0.0 0.0
+fix		3 indenter   setforce 0.0 0.0 0.0
+fix		4 all temp/rescale 10 300 300 0.01 1.0    ##10= perform rescaling after this many timesteps
+
+timestep 0.001
+
+fix_modify	4 temp new
+
+thermo		1000
+thermo_modify	temp new
+dump 1 all custom 2000 alleq1.*.dump id type x y z vx vy vz fx fy fz
+
+run		200000
+
+timestep 0.001              ##10 fs
+
+#########################
+###################### loading Phase
+unfix 4 
+fix 4 w_thermo temp/rescale 10 300.0 300.0 0.5 1.0    ## thermostat layer
+ #label       loop
+#variable    a loop 5  
+
+variable l_rate equal -0.5              			 # loading rate
+variable ul_rate equal 0.1             			 # unloading rate
+
+velocity     indenter   set	  0.0   ${l_rate} 0.0 sum no units box
+
+variable fx equal fcm(indenter,x)
+variable fy equal fcm(indenter,y)
+variable fz equal fcm(indenter,z)
+
+fix_modify	4 temp new
+thermo		100 
+thermo_modify	temp new
+thermo_style custom step elapsed elaplong temp pe ke etotal press time v_fx v_fy v_fz  
+
+dump 2 all custom 100 all_load1.*.dump id type x y z vx vy vz fx fy fz
+run 15000     ###      it will indent 15000*0.001*0.5= 7.5 Armstrong fro yvalue
+
+#########################
+###################### Constant Phase
+timestep 0.0005
+thermo		100 
+thermo_style custom step elapsed elaplong temp pe ke etotal press time v_fx v_fy v_fz  
+dump 3 all custom 100 all_const1.*.dump id type x y z vx vy vz fx fy fz
+run 10000     ###      constant phase for 5ps
+
+#########################
+###################### unloading Phase
+
+velocity     indenter   set	  0.0   ${ul_rate} 0.0 sum no units box
+thermo		100 
+thermo_modify	temp new
+thermo_style custom step elapsed elaplong temp pe ke etotal press time v_fx v_fy v_fz
+dump 4 all custom 100 all_unload1.*.dump id type x y z vx vy vz fx fy fz
+run 250000     ###      unloading phase for 5ps

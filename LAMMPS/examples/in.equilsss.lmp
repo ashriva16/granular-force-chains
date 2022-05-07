@@ -1,0 +1,90 @@
+#---------------------------------- INITIALIZATION ---------------------------------
+
+units metal
+dimension 3
+boundary s s s
+atom_style atomic
+variable latparam1 equal 3.614
+
+variable xdim equal ${latparam1}*sqrt(6)/2*30
+variable ydim equal ${latparam1}*sqrt(2)/2*30
+variable zdim equal ${latparam1}*sqrt(3)*60
+
+#-----------------------------CREATES BOX---------------------------------------
+
+region whole block -.001 ${xdim} -.001 ${ydim} -.001 ${zdim} units box
+
+create_box 2 whole
+
+lattice fcc ${latparam1} orient x 1 1 2 orient y -1 1 0 orient z -1 -1 1
+
+lattice fcc ${latparam1} orient x 1 1 2 orient y -1 1 0 orient z -1 -1 1
+create_atoms 1 region whole
+set region whole type/fraction 2 0.0 2500
+
+#----------------------------DEFINE REGIONS------------------------------------------
+
+region 1 block INF INF INF INF INF 12.51926324 units box
+region 2 block INF INF INF INF 363.0586339 INF units box
+region 3 block -.001 ${xdim} -.001 ${ydim} 12.51926324 363.0586339 units box
+
+#--------------------------- FORCE FIELDS --------------------------------------------
+
+pair_style eam/alloy
+pair_coeff * * Zhou_AlCu.eam.alloy Cu Al
+neighbor 2.0 bin
+neigh_modify delay 10 check yes
+
+#----------------------------------- GROUP REGIONS ------------------------------------
+
+group top region 2
+group bot region 1
+group topbot union top bot
+group mid region 3
+group total union topbot mid
+
+#--------------------------------------MINIMIZATION---------------------------------------#
+
+compute csym all centro/atom fcc
+compute peratom all pe/atom
+compute eatoms all reduce sum c_peratom
+
+reset_timestep 0
+min_style cg
+minimize 1.0e-25 1.0e-25 100000 500000
+
+run 1
+uncompute peratom
+uncompute eatoms
+uncompute csym
+# #------------------------------------EQUILIBRATION-----------------------------------------#
+velocity all create 100 233 mom yes rot yes
+
+reset_timestep 0
+timestep 0.001
+
+fix 1 all nvt temp 100 300 1.0 drag 1.0
+thermo 1000
+thermo_style custom step lx ly lz press pxx pyy pzz pe temp ke etotal 
+#dump 1 all custom 1000 dump.equilibrated.* id type xs ys zs c_csym c_peratom fx fy fz
+run 100000
+unfix 1
+
+fix 1 all nvt temp 300 300 1.0 drag 1.0
+thermo 1000
+thermo_style custom step pe lx ly lz press pxx pyy pzz temp
+#dump 2 all custom 1000 dump.equilibrated.* id type xs ys zs c_csym c_peratom fx fy fz
+run 50000
+unfix 1
+
+# #----------------------- OUTPUT -----------------------------------------
+restart 1 equil_100000.dat
+#dump 1 all custom 1 dump.equilibrated.* id type xs ys zs c_csym c_peratom fx fy fz
+run 1
+
+
+#simulation done
+
+print "All done"
+#---------------------------------------------------------------------------
+

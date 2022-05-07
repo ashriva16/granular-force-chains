@@ -1,0 +1,76 @@
+# ## Defining global variables -----------------------------------------------------
+variable	seed equal 5008
+variable	tstep equal  .0001
+variable	rstep equal 100/${tstep}
+variable	savestep equal .1/${tstep}
+variable	F equal .5
+variable   	n equal  5  # Total number will be NXN
+variable   	TN equal ${n}*${n}
+variable	dia1 equal 1
+variable	dia2 equal .99
+
+# For LJ Potentials
+variable    M equal 12  # ideally 12
+variable    N equal 6  # ideally 6
+variable	sigma_a equal  ${dia1}
+variable    sigma_b equal  ${dia2}
+variable    r_cut equal 1.2
+variable    rmin equal ($M/$N)^(1/($M-$N))
+variable 	a equal  (${rmin})*.1
+variable 	c equal  2/(sqrt(3)*($a^2))
+
+# 2d LJ obstacle flow
+dimension 2
+boundary p p p
+atom_style atomic
+neighbor 0.3 bin
+neigh_modify delay 5
+
+# create geometry
+lattice hex ${c}
+region box block 0 50 0 50 -0.25 0.25
+create_box 3 box
+create_atoms 1 box
+
+# LJ potentials
+pair_style lj/cut ${r_cut}
+pair_coeff * * 1.0 1.0
+pair_modify     shift yes
+
+fix 	2d  all enforce2d
+mass * 1.0
+######################################
+# Output Setup
+variable        t equal "step*dt"
+thermo	        ${savestep}
+# pe is per atom in thermo
+thermo_style    custom atoms v_t step temp pe ke etotal ecouple econserve xlo xhi ylo yhi
+# thermo_modify   lost ignore
+compute 		csym all centro/atom 6
+compute 		peratom all pe/atom 
+compute         c1 all ke/atom
+compute         c2 all pe/atom
+compute         3 all stress/atom NULL
+compute         1 all property/local patom1 patom2 ptype1 ptype2
+compute 	    2 all pair/local dist eng fx fy fz #p1 p2 p3
+dump   	        1 all custom ${savestep} visualize.du &
+								id type &
+								x y z &
+								vx vy vz &
+								fx fy fz & 
+								c_c1 c_c2 &
+								c_3[1] c_3[2] c_3[3] c_3[4] c_3[5] c_3[6]
+dump 	        2 all local ${savestep} dump.neigh index c_1[1] c_1[2] &
+										            c_2[1] c_2[2] &
+										            c_2[3] c_2[4] c_2[5]
+
+######################################
+# EQUILIBRATION
+reset_timestep	0
+timestep 		${tstep}
+fix             relax all box/relax iso 0 vmax .1
+# min_modify		dmax 0.2 line quadratic
+minimize		0  0  100000  1000000
+# fix             1 all nve/sphere
+# fix             3 all langevin 0 0 .1 699483
+# run             ${rstep}

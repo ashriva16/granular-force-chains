@@ -1,0 +1,224 @@
+LAMMPS (10 Mar 2021)
+# ## Defining global variables -----------------------------------------------------
+variable	seed equal 5008
+variable	tstep equal  .0001
+variable	rstep equal 10/${tstep}
+variable	rstep equal 10/0.0001
+variable	savestep equal 1/${tstep}
+variable	savestep equal 1/0.0001
+variable	F equal .5
+variable   	n equal  5  # Total number will be NXN
+variable   	TN equal ${n}*${n}
+variable   	TN equal 5*${n}
+variable   	TN equal 5*5
+
+# For LJ Potentials
+variable    M equal 12
+variable    N equal 6
+variable	gamma_rep equal ${M}  # ideally 12
+variable	gamma_rep equal 12  
+variable	gamma_att equal ${N}  # ideally 6
+variable	gamma_att equal 6  
+variable    disorder equal ${D}
+variable    disorder equal 0
+variable	sigma_a equal  1+${disorder}
+variable	sigma_a equal  1+0
+variable    sigma_b equal  1-${disorder}
+variable    sigma_b equal  1-0
+variable    r_cut equal 1.2
+variable    rmin equal ($M/$N)^(1/($M-$N))
+variable    rmin equal (12/$N)^(1/($M-$N))
+variable    rmin equal (12/6)^(1/($M-$N))
+variable    rmin equal (12/6)^(1/(12-$N))
+variable    rmin equal (12/6)^(1/(12-6))
+variable 	a equal  (${rmin})
+variable 	a equal  (1.12246204830937)
+variable 	c equal  2/(sqrt(3)*($a^2))
+variable 	c equal  2/(sqrt(3)*(1.12246204830937^2))
+
+# 2d LJ obstacle flow
+dimension 2
+boundary p p p
+atom_style sphere
+neighbor 0.3 bin
+neigh_modify delay 5
+
+# create geometry
+lattice 		hex ${c}
+lattice 		hex 0.91648642466574
+Lattice spacing in x,y,z = 1.1224620 1.9441613 1.1224620
+region 			box block 0 50 0 30 -0.25 0.25
+create_box 		2 box
+Created orthogonal box = (0.0000000 0.0000000 -0.28061551) to (56.123102 58.324839 0.28061551)
+  2 by 2 by 1 MPI processor grid
+create_atoms 	1 box
+Created 3000 atoms
+  create_atoms CPU = 0.002 seconds
+
+group 			mobile type 1
+3000 atoms in group mobile
+set				group mobile type/fraction 2 ${F} 12345
+set				group mobile type/fraction 2 0.5 12345
+Setting atom values ...
+  1544 settings made for type/fraction
+set             type 1 diameter ${sigma_a}
+set             type 1 diameter 1
+Setting atom values ...
+  1456 settings made for diameter
+set             type 2 diameter ${sigma_b}
+set             type 2 diameter 1
+Setting atom values ...
+  1544 settings made for diameter
+
+# LJ potentials
+pair_style      lj/cut ${r_cut}
+pair_style      lj/cut 1.2
+pair_coeff      1 1 100.0 ${sigma_a}
+pair_coeff      1 1 100.0 1
+pair_coeff      2 2 100.0 ${sigma_b}
+pair_coeff      2 2 100.0 1
+pair_coeff      1 2 100.0 1
+
+# pair_style    mie/cut ${r_cut}
+# pair_coeff    1 1 1.0 ${sigma_a} ${gamma_rep} ${gamma_att}
+# pair_coeff    2 2 1.0 ${sigma_b} ${gamma_rep} ${gamma_att}
+# pair_coeff    1 2 1.0 1 ${gamma_rep} ${gamma_att}
+
+pair_modify     shift yes
+
+fix 			2d  all enforce2d
+
+# ---------- Run Minimization ---------------------
+reset_timestep 0
+compute         eng all pe/atom
+compute         eatoms all reduce sum c_eng
+fix             1 all box/relax iso 0.0 vmax 0.001
+# thermo          100
+thermo	        ${savestep}
+thermo	        10000
+thermo_style    custom step pe lx ly lz press pxx pyy pzz c_eatoms
+min_style       cg
+minimize        1e-25 1e-25 10000 10000
+WARNING: Using 'neigh_modify every 1 delay 0 check yes' setting during minimization (../min.cpp:188)
+Neighbor list info ...
+  update every 1 steps, delay 0 steps, check yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 1.5
+  ghost atom cutoff = 1.5
+  binsize = 0.75, bins = 75 78 1
+  1 neighbor lists, perpetual/occasional/extra = 1 0 0
+  (1) pair lj/cut, perpetual
+      attributes: half, newton on
+      pair build: half/bin/atomonly/newton
+      stencil: half/bin/2d/newton
+      bin: standard
+Per MPI rank memory allocation (min/avg/max) = 5.560 | 5.560 | 5.560 Mbytes
+Step PotEng Lx Ly Lz Press Pxx Pyy Pzz c_eatoms 
+       0   -32.710414    56.123102    58.324839   0.56123102 2.4862297e-11 2.485766e-11 2.4866933e-11            0   -32.710414 
+       1   -32.710414    56.123102    58.324839   0.56123102 6.0883118e-14 1.4812692e-14 1.0695354e-13            0   -32.710414 
+Loop time of 0.00113726 on 4 procs for 1 steps with 3000 atoms
+
+59.6% CPU use with 4 MPI tasks x no OpenMP threads
+
+Minimization stats:
+  Stopping criterion = energy tolerance
+  Energy initial, next-to-last, final = 
+     -32.7104137250753  -32.7104137250753  -32.7104137250753
+  Force two-norm initial, final = 1.6279941e-07 4.2691120e-09
+  Force max component initial, final = 1.6276704e-07 3.9858605e-10
+  Final line search alpha, max atom move = 1.0000000 3.9858605e-10
+  Iterations, force evaluations = 1 2
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 0.00033736 | 0.00049245 | 0.00062013 |   0.0 | 43.30
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 9.7275e-05 | 0.00022781 | 0.00038671 |   0.0 | 20.03
+Output  | 0          | 0          | 0          |   0.0 |  0.00
+Modify  | 2.861e-05  | 3.9995e-05 | 5.579e-05  |   0.0 |  3.52
+Other   |            | 0.000377   |            |       | 33.15
+
+Nlocal:        750.000 ave         775 max         725 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Nghost:        157.000 ave         182 max         132 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Neighs:        2250.00 ave        2325 max        2175 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+
+Total # of neighbors = 9000
+Ave neighs/atom = 3.0000000
+Neighbor list builds = 0
+Dangerous builds = 0
+unfix 	        1
+
+
+######################################
+# Output Setup
+variable        t equal "step*dt"
+thermo	        ${savestep}
+thermo	        10000
+# pe is per atom in thermo
+# thermo_style    custom atoms v_t step temp pe ke etotal ecouple econserve xlo xhi ylo yhi
+# thermo_modify   lost ignore
+compute 		csym all centro/atom 6
+compute 		peratom all pe/atom
+compute         c1 all ke/atom
+compute         c2 all pe/atom
+compute         3 all stress/atom NULL
+compute         1 all property/local patom1 patom2 ptype1 ptype2
+compute 	    2 all pair/local dist eng fx fy fz #p1 p2 p3
+dump   	        1 all custom ${savestep} visualize.du 								id type radius 								x y z 								vx vy vz 								fx fy fz 								c_c1 c_c2 								c_3[1] c_3[2] c_3[3] c_3[4] c_3[5] c_3[6]
+dump   	        1 all custom 10000 visualize.du 								id type radius 								x y z 								vx vy vz 								fx fy fz 								c_c1 c_c2 								c_3[1] c_3[2] c_3[3] c_3[4] c_3[5] c_3[6]
+dump 	        2 all local ${savestep} dump.neigh index c_1[1] c_1[2] 										            c_2[1] c_2[2] 										            c_2[3] c_2[4] c_2[5]
+dump 	        2 all local 10000 dump.neigh index c_1[1] c_1[2] 										            c_2[1] c_2[2] 										            c_2[3] c_2[4] c_2[5]
+
+
+######################################
+# EQUILIBRATION
+reset_timestep	0
+# timestep 0.05 # timestep = 0.01 femto-second
+
+compute	           new2 all temp
+velocity           all create .00001 482748 temp new2
+fix                1 all npt temp .00001 1e-20 1 iso .0001 .0001 1 drag 1
+# fix                 1 all nvt temp .0001 .0001 1.0
+
+# Set thermo output
+# thermo 100
+thermo_style custom step lx ly lz press pxx pyy pzz pe temp
+
+run         ${rstep} # 1000000 This is 20 femtosecond # you have to equilibrate it till the structure stops moving
+run         100000 
+Neighbor list info ...
+  update every 1 steps, delay 5 steps, check yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 1.5
+  ghost atom cutoff = 1.5
+  binsize = 0.75, bins = 75 78 1
+  4 neighbor lists, perpetual/occasional/extra = 1 3 0
+  (1) pair lj/cut, perpetual
+      attributes: half, newton on
+      pair build: half/bin/atomonly/newton
+      stencil: half/bin/2d/newton
+      bin: standard
+  (2) compute centro/atom, occasional
+      attributes: full, newton on
+      pair build: full/bin/atomonly
+      stencil: full/bin/2d
+      bin: standard
+  (3) compute property/local, occasional, copy from (1)
+      attributes: half, newton on
+      pair build: copy
+      stencil: none
+      bin: none
+  (4) compute pair/local, occasional, copy from (1)
+      attributes: half, newton on
+      pair build: copy
+      stencil: none
+      bin: none
+Per MPI rank memory allocation (min/avg/max) = 10.98 | 10.98 | 10.98 Mbytes
+Step Lx Ly Lz Press Pxx Pyy Pzz PotEng Temp 
+       0    56.123102    58.324839   0.56123102 9.1618094e-06 9.264992e-06 9.0586267e-06            0   -32.710414        1e-05 
+ERROR: Non-numeric pressure - simulation unstable (../fix_nh.cpp:1062)
+Last command: run         ${rstep} # 1000000 This is 20 femtosecond # you have to equilibrate it till the structure stops moving

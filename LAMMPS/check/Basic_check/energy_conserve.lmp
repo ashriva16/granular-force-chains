@@ -1,0 +1,38 @@
+##Input Script##
+boundary        f f f
+atom_style      sphere
+units           lj
+lattice         diamond 3.567
+region          box block -50 +50 -50 +50 -50 +50 units box
+atom_modify     map     array
+neighbor        2.0 nsq
+create_box      2       box
+create_atoms    1       single 0 0 0 units box
+create_atoms    2       single 2.7 0 0 units box
+# mass            1       12.011
+# mass            2       12.011
+timestep        0.00001
+pair_style      lj/cut 1
+pair_coeff      * * 1.0 1.0
+group           myatom id 2
+velocity        myatom set -50.0 0 0 units box
+variable        dimerdistance equal x[2]-x[1]
+
+# Setup output
+compute	        Rke all erotate/sphere
+compute         TKe all ke
+compute         Pe all pe
+variable        E  equal c_TKe+c_Pe+c_Rke
+variable        ke atom "vx*vx+vy*vy+vz*vz"
+variable        t equal "step*dt"
+
+# thermo_style custom step temp pe ke etotal v_dimerdistance
+thermo          1
+# thermo_style	custom v_dimerdistance step atoms vol temp c_Rke ke c_TKe pe c_Pe etotal v_E
+thermo_style    custom v_dimerdistance v_t step temp pe ke etotal
+thermo_modify   norm no
+compute         sys_pe all pe
+shell           mkdir Dump
+dump            mindump all custom 1 ./Dump/*.dump id type xs ys zs
+fix             11 all nve
+run             6000

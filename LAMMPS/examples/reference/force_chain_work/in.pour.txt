@@ -1,0 +1,125 @@
+log log.glass
+
+atom_style    sphere
+boundary    p p fm
+newton   	 off
+# comm_modify    single vel yes
+comm_modify    vel yes
+
+region   	 reg block 0 15 0 15 -0.5 26 units box
+create_box    2 reg
+
+neighbor    0.2 bin
+neigh_modify    delay 0
+
+#(IMPORTANT NOTE: these values of stiffness (2000) and timestep (0.001)
+#are used in this example file to produce a quick simulation and movie.
+#More appropriate values for realistic simulations would be
+#k = 2.0e5 and dt = 0.0001, as in bench/in.chute.)
+
+pair_style  	gran/hertz/history 200000.0 NULL 50.0 NULL 0.1 1
+pair_coeff    * *
+
+timestep    0.001
+
+fix   	 1 all nve/sphere
+fix   	 2 all gravity 1.0 spherical 0.0 -180.0
+fix   	 zlower all wall/gran hooke/history 2000.0 NULL 50.0 NULL 0.5 0 &
+   	 zplane 0.0 2000.0
+
+region   	 slab block 1 14.0 1.0 14.0 22.0 25.0 units box
+fix   	 ins all pour 3000 1 300719 vol 0.005 50 region slab diam poly 2 1 0.5 1.4 0.5
+
+compute   	 1 all erotate/sphere
+thermo_style    custom step atoms ke c_1 vol
+thermo   	 10000
+thermo_modify    lost ignore norm no
+compute_modify    thermo_temp dynamic yes
+
+compute   	 2 all property/local patom1 patom2
+compute   	 3 all pair/local fx fy fz p1 p2 p3
+compute 	4 all property/atom id type radius vx vy vz fx fy fz
+
+variable ke atom "vx*vx+vy*vy+vz*vz"
+dump   	 1 all local 1000 dump.force0 index c_2[1] c_2[2] &
+   					  c_3[1] c_3[2] c_3[3] &
+   					 c_3[4] c_3[5] c_3[6]
+# dump   	 5 all custom 1000 dump.position0 id x y z diameter fx fy fz v_ke
+
+# dump   	 11 all local 4100000 dump.force1 index c_2[1] c_2[2] &
+#    					  c_3[1] c_3[2] c_3[3] &
+#    					 c_3[4] c_3[5] c_3[6]
+# dump   	 51 all custom 4100000 dump.position1 id x y z diameter
+
+
+# dump   	 12 all local 4150000 dump.force2 index c_2[1] c_2[2] &
+#    					  c_3[1] c_3[2] c_3[3] &
+#    					 c_3[4] c_3[5] c_3[6]
+# dump   	 52 all custom 4150000 dump.position2 id x y z diameter
+
+# dump   	 13 all local 4200000 dump.force3 index c_2[1] c_2[2] &
+#    					  c_3[1] c_3[2] c_3[3] &
+#    					 c_3[4] c_3[5] c_3[6]
+# dump   	 53 all custom 4200000 dump.position3 id x y z diameter
+
+# dump   	 14 all local 4250000 dump.force4 index c_2[1] c_2[2] &
+#    					  c_3[1] c_3[2] c_3[3] &
+#    					 c_3[4] c_3[5] c_3[6]
+# dump   	 54 all custom 4250000 dump.position4 id x y z diameter
+
+# dump   	 15 all local 4300000 dump.force5 index c_2[1] c_2[2] &
+#    					  c_3[1] c_3[2] c_3[3] &
+#    					 c_3[4] c_3[5] c_3[6]
+# dump   	 55 all custom 4300000 dump.position5 id x y z diameter
+
+# dump   	 16 all local 4350000 dump.force6 index c_2[1] c_2[2] &
+#    					  c_3[1] c_3[2] c_3[3] &
+#    					 c_3[4] c_3[5] c_3[6]
+# dump   	 56 all custom 4350000 dump.position6 id x y z diameter
+
+# dump   	 17 all local 4400000 dump.force7 index c_2[1] c_2[2] &
+#    					  c_3[1] c_3[2] c_3[3] &
+#    					 c_3[4] c_3[5] c_3[6]
+# dump   	 57 all custom 4400000 dump.position7 id x y z diameter
+
+# dump   	 18 all local 4450000 dump.force8 index c_2[1] c_2[2] &
+#    					  c_3[1] c_3[2] c_3[3] &
+#    					 c_3[4] c_3[5] c_3[6]
+# dump   	 58 all custom 4450000 dump.position8 id x y z diameter
+
+# dump   	 19 all local 4500000 dump.force9 index c_2[1] c_2[2] &
+#    					  c_3[1] c_3[2] c_3[3] &
+#    					 c_3[4] c_3[5] c_3[6]
+# dump   	 59 all custom 4500000 dump.position9 id x y z diameter
+
+
+
+dump   	 id all atom 10000 dump.pour
+ 
+run   	 40000000
+
+#define pressure
+
+lattice		fcc 0.8442
+region		slab2 block 0.0 15.0 0.0 15.0 22.0 24.0 units box
+create_atoms	2 region slab2
+group		pressure region slab2
+fix		3 pressure setforce 0.0 0.0 NULL
+fix		4 pressure aveforce 0.0 0.0 -0.2
+run		100000
+fix		5 pressure aveforce 0.0 0.0 -0.6
+run		50000
+fix		6 pressure aveforce 0.0 0.0 -2
+run		50000
+fix		7 pressure aveforce 0.0 0.0 -6
+run		50000
+fix		8 pressure aveforce 0.0 0.0 -20
+run		50000
+fix		9 pressure aveforce 0.0 0.0 -60
+run		50000
+fix		10 pressure aveforce 0.0 0.0 -200
+run		50000
+fix		11 pressure aveforce 0.0 0.0 -600
+run		50000
+fix		12 pressure aveforce 0.0 0.0 -2000
+run		50000

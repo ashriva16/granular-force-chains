@@ -1,0 +1,51 @@
+variable    disorder equal ${D}
+variable	dia1 equal 1+${disorder}
+variable	dia2 equal 1-${disorder}
+
+units lj
+#Args: diameter, mass, angular velocity 
+atom_style	sphere
+# mean communicate velocity info with ghost atoms 
+comm_modify    vel yes
+# define 2D box region. It is  geometric region of space. 
+region		box block 0 10 0 10 -1 1 units box
+create_box  2 box
+
+lattice         fcc 1
+comm_modify     vel yes
+create_atoms    1 box
+create_atoms    2 box
+set             type 1 diameter ${dia1}
+set             type 2 diameter ${dia2}
+
+## --------------------------------------------------------------------------
+
+# pair_style      lj/cut 2.5
+# pair_coeff      * * 1 1
+# pair_modify     shift yes
+
+# Granular system apparently required atoms to work
+# History will give error
+# pair_style      gran/hooke 1e5 NULL 100.0 NULL 0.5 0
+# pair_coeff    	* *
+# pair_style		gran/hooke 1e5 0 0 0 0 0
+# pair_coeff    	* *
+
+pair_style python 2.5
+pair_coeff * * py_pot2.customhooke lj1 lj2
+
+# Hybrid Potentials
+# pair_style hybrid/overlay lj/cut 2.5 gran/hooke 1e5 NULL 100.0 NULL 0.5 0
+# pair_coeff * * lj/cut 1.0 1.0
+# pair_coeff * * gran/hooke
+
+## --------------------------------------------------------------------------
+# shell rm -f ankit.txt
+# pair_write 2 2 1500 r 0.375 1.99 ankit.txt ankit
+
+shell rm hooke11.table
+shell rm hooke12.table
+shell rm hooke22.table
+pair_write  1 1 2000 r 0.000001 2.5 hooke11.table ENTRY1
+pair_write  1 2 2000 r 0.000001 2.5 hooke12.table ENTRY1
+pair_write  2 2 2000 r 0.000001 2.5 hooke22.table ENTRY1

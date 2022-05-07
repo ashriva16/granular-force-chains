@@ -1,0 +1,80 @@
+##Input Script##
+variable a equal 0
+variable b equal .5
+
+boundary        f f p
+atom_style      sphere
+units           lj
+region          box block -5 +5 -5 +5 -50 +50 units box
+atom_modify     map     array
+neighbor        2.0 nsq
+create_box      2       box
+create_atoms    1       single ${a} 0 0 units box
+create_atoms    1       single ${b} 0 0 units box
+# mass	      * 1.0
+# mass            1       12.011
+# mass            2       12.011
+timestep        0.001
+
+pair_style      lj/cut 1.2
+pair_coeff      * * 1.0 1.0
+# pair_style      mie/cut 1.0
+# pair_coeff      * * 1.0 1 40 0
+pair_modify     shift yes
+group           myatom id 1
+
+# velocity        myatom set -50.0 0 0 units box
+# variable        dimerdistance equal x[2]-x[1]
+set             type * diameter 1
+
+# group 		    indent type 2
+# group 		    boundary type 1
+# fix 		    4 indent addforce -1 0 0
+# fix_modify      4 energy yes
+# fix	            2 boundary setforce 0.0 0.0 0.0
+
+# variable        v equal xhi
+# variable        xhi0 equal $v
+# variable        xhi1 equal ${xhi0}
+# fix             wallxhi all wall/lj126 xhi EDGE 1.0 0.5 0.5 units box
+# fix_modify      wallxhi energy yes
+
+# variable        v equal xlo
+# variable        xlo0 equal $v
+# variable        xlo1 equal ${xlo0}
+# fix             wallxlo all wall/lj126 xlo EDGE 1.0 0.5 0.5 units box
+# fix_modify      wallxlo energy yes
+
+# variable        v equal ylo
+# variable        ylo0 equal $v
+# variable        ylo1 equal ${ylo0}
+# fix             wallylo all wall/lj126 ylo EDGE 1.0 0.5 0.5 units box
+# fix_modify      wallylo energy yes
+
+# Setup output
+compute	        Rke all erotate/sphere
+compute         TKe all ke
+compute         Pe all pe
+compute         c1 all ke/atom
+compute         c2 all pe/atom
+variable        E  equal c_TKe+c_Pe+c_Rke
+variable        ke atom "vx*vx+vy*vy+vz*vz"
+variable        t equal "step*dt"
+
+variable        x equal x[1]
+thermo          1
+# thermo_style custom step temp pe ke etotal v_dimerdistance
+# thermo_style	custom v_dimerdistance step atoms vol temp c_Rke ke c_TKe pe c_Pe etotal v_E
+thermo_style    custom v_t v_x step temp pe ke etotal
+thermo_modify   norm no
+compute         sys_pe all pe
+dump   	        1 all custom 1 visualize.du id type radius x y z vx vy vz fx fy fz c_c1 c_c2 
+
+min_style quickmin
+min_modify dmax 5e-6
+minimize        0 0 100000 100000
+
+# fix 1 all nve
+# fix 1 all nvt temp 1e-20  1e-20 $(100.0*dt)
+# run 1000
+# print "${xhi0} ${xlo0} ${ylo0}"

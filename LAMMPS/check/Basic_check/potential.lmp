@@ -1,0 +1,31 @@
+units lj
+#Args: diameter, mass, angular velocity 
+atom_style	sphere
+# mean communicate velocity info with ghost atoms 
+comm_modify    vel yes
+# define 2D box region. It is  geometric region of space. 
+region		box block 0 10 0 10 -1 1 units box
+create_box 1 box
+
+# They both are same
+# pair_style python 1
+# pair_coeff * * py_pot.LJCutshift lj
+pair_style      lj/cut 1
+pair_coeff      * * 1 1
+pair_modify     shift yes
+
+# Granular system apparently required atoms to work
+# History will give error
+# lattice         fcc .9
+# create_atoms    1 box
+# pair_style      gran/hooke 1e5 NULL 100.0 NULL 0.5 0
+# pair_coeff    	* *
+
+# Hybrid Potentials
+# lattice         fcc 0.9
+# create_atoms 1 box
+# pair_style hybrid/overlay lj/cut 2.5 gran/hooke 1e5 NULL 100.0 NULL 0.5 0
+# pair_coeff * * lj/cut 1.0 1.0
+# pair_coeff * * gran/hooke
+
+pair_write 1 1 150 r .5 1.99 table_ljcut1.txt ankit

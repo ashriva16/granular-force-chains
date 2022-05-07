@@ -1,0 +1,132 @@
+# ## Defining global variables -----------------------------------------------------
+variable		seed equal 5008
+variable		tstep equal  .0001
+variable		rstep equal 100/${tstep}
+variable 		r2step equal 2*${rstep}
+variable		savestep equal 10/${tstep}
+variable		F equal .5
+variable   		n equal  5  # Total number will be NXN
+variable   		TN equal ${n}*${n}
+
+# For LJ Potentials
+# variable		gamma_rep equal ${M}  # ideally 12
+# variable		gamma_att equal ${N}  # ideally 6
+variable    	disorder equal ${D}
+variable		sigma_a equal  1+${disorder}
+variable    	sigma_b equal  1-${disorder}
+variable    	sigma_ab equal  (${sigma_a}+${sigma_b})/2
+variable    	alpha equal  1.12
+variable 		r_cut_a equal ${sigma_a}*${alpha}
+variable 		r_cut_b equal ${sigma_b}*${alpha}
+variable 		r_cut_ab equal (${r_cut_a}+${r_cut_b})/2
+variable 		dia_b equal ${sigma_b}*${alpha}
+if "${alpha} <= 1.12" then "variable dia_a equal ${sigma_a}*${alpha}" else "variable dia_a equal ${sigma_a}*1.12"
+if "${alpha} <= 1.12" then "variable dia_b equal ${sigma_b}*${alpha}" else "variable dia_b equal ${sigma_b}*1.12"
+variable 		a equal  ${dia_a}#(${rmin})
+variable 		c equal  2/(sqrt(3)*($a^2))
+
+# 2d LJ obstacle flow
+dimension 		2
+boundary		p p p
+atom_style 		sphere
+neighbor 		0.3 bin
+neigh_modify 	delay 5
+comm_modify    	vel yes
+
+# create geometry
+lattice 		hex ${c}
+region 			box block 0 50 0 30 -0.25 0.25
+# region 			box block 0 1 0 .5 -0.25 0.25
+create_box 		2 box
+create_atoms 	1 box
+change_box  	all triclinic
+
+group 			mobile type 1
+set				group mobile type/fraction 2 ${F} 12345
+set 			type 1 diameter ${dia_a}
+set             type 2 diameter ${dia_b}
+
+# potentials functions
+pair_style      lj/cut 1
+pair_coeff      1 1 100.0 ${sigma_a} ${r_cut_a}
+pair_coeff      2 2 100.0 ${sigma_b} ${r_cut_b}
+pair_coeff      1 2 100.0 ${sigma_ab} ${r_cut_ab}
+pair_modify     shift yes
+
+# pair_style    	mie/cut 1
+# pair_coeff    	1 1 1.0 ${sigma_a} ${gamma_rep} ${gamma_att} ${r_cut_a}
+# pair_coeff    	2 2 1.0 ${sigma_b} ${gamma_rep} ${gamma_att} ${r_cut_b}
+# pair_coeff    	1 2 1.0 ${sigma_ab} ${gamma_rep} ${gamma_att} ${r_cut_ab}
+# # pair_coeff    	1 2 1.0 1 ${gamma_rep} ${gamma_att} 1
+# pair_modify     shift yes
+
+fix 			2d  all enforce2d
+
+# # Store final cell length for strain calculations
+variable tmp equal "ly"
+variable L0 equal ${tmp}
+
+######################################
+# Output Setup
+variable        t equal "step*dt"
+thermo	        ${savestep}
+# pe is per atom in thermo
+# thermo_style    custom atoms v_t step temp pe ke etotal ecouple econserve xlo xhi ylo yhi
+compute 		myTemp all temp
+# thermo_modify   lost ignore
+thermo_modify 	temp myTemp
+thermo_style 	custom atoms v_t step pe ke etotal lx ly lz press pxx pyy pzz
+compute 		csym all centro/atom 6
+compute 		peratom all pe/atom 
+compute         c1 all ke/atom
+compute         c2 all pe/atom
+compute         3 all stress/atom myTemp
+compute         1 all property/local patom1 patom2 ptype1 ptype2
+compute 	    2 all pair/local dist eng fx fy fz #p1 p2 p3
+dump   	        1 all custom ${savestep} visualize.du &
+								id type radius &
+								x y z &
+								vx vy vz &
+								fx fy fz & 
+								c_c1 c_c2 &
+								c_3[1] c_3[2] c_3[3] c_3[4] c_3[5] c_3[6]
+dump 	        2 all local ${savestep} dump.neigh index c_1[1] c_1[2] &
+										            c_2[1] c_2[2] &
+										            c_2[3] c_2[4] c_2[5]
+
+######################################
+# EQUILIBRATION
+timestep 		${tstep}
+fix             relax all box/relax iso 0 vmax .0001
+min_modify		dmax 0.2 line quadratic
+minimize		1e-20  1e-20  1000000  1000000
+unfix 	        relax
+minimize		1e-20  1e-20  1000000  1000000
+
+# fix				_nve_ all nve/sphere
+# fix				_damp_ all langevin 0 0 .1 699483
+# run				${rstep}
+# unfix 			_nve_
+# unfix 			_damp_
+
+# ######################################
+# DEFROMATION
+reset_timestep	0
+fix				_nve_ all nve/sphere
+fix				_damp_ all langevin 0 0 .1 699483
+fix				_deform_ all deform 1 y scale .999999990 #remap x
+# fix             _deform_ all deform 1 y scale .99 x scale .99 remap x # Strain of 1e-4
+run				${rstep}
+
+unfix			_deform_
+unfix 			_nve_
+
+reset_timestep	0
+min_modify		dmax 0.2 line quadratic
+# min_modify 		cg	
+minimize		1e-20  1e-20  100000  100000
+
+variable		strain equal "(v_L0 - ly)/v_L0"
+variable		p1 equal "v_strain"
+variable		tmp equal "ly"
+print			"${p1} ${tmp} ${L0}"

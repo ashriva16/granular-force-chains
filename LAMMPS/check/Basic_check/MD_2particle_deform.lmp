@@ -1,0 +1,63 @@
+ ##Input Script##
+boundary        p p p
+dimension 	    2
+atom_style      sphere
+units           lj
+lattice         sq 3.567
+region          box block -.5 +.5 -.5 +1.5 -.5 +.5 units box
+atom_modify     map     array
+neighbor        2.0 nsq
+create_box      2   box
+create_atoms    1   single 0 0 0 units box
+create_atoms    2   single 0 1 0 units box
+# mass            1       12.011
+# mass            2       12.011
+variable        tstep equal  .0001
+variable        rstep equal 1/${tstep}
+timestep        ${tstep}
+
+pair_style      lj/cut 1
+pair_coeff      * * 1.0 1.0
+group           myatom id 2
+# velocity        myatom set -50.0 0 0 units box
+variable        dimerdistance equal y[2]-y[1]
+
+# Setup output
+compute	        Rke all erotate/sphere
+compute         TKe all ke
+compute         Pe all pe
+# compute         1 all pressure thermo_temp
+variable        E  equal c_TKe+c_Pe+c_Rke
+variable        ke atom "vx*vx+vy*vy+vz*vz"
+variable        t equal "step*dt"
+thermo          1
+thermo_style    custom atoms v_dimerdistance step temp pe ke
+compute 		peratom all pe/atom 
+compute         c1 all ke/atom
+compute         c2 all pe/atom
+compute         3 all stress/atom NULL
+compute         1 all property/local patom1 patom2 ptype1 ptype2
+compute 	    2 all pair/local dist eng fx fy fz #p1 p2 p3
+dump   	        1 all custom 1 visualize.du &
+								id type radius &
+								x y z &
+								vx vy vz &
+								fx fy fz & 
+								c_c1 c_c2 &
+								c_3[1] c_3[2] c_3[3] c_3[4] c_3[5] c_3[6]
+# thermo_modify   norm yes
+# compute         sys_pe all pe
+# shell           mkdir Dump
+# dump   	        1 all custom 1 visualize.du id type x y z radius vx vy vz fx fy fz v_ke
+
+
+fix             2 all deform 1 y scale .80 remap x 
+# fix             11 all nve
+# fix             3 all langevin 0 0 1000.0 699483
+fix             1 all nvt temp 1e-100 1e-100 1.0
+run             ${rstep}
+
+# unfix 2
+# minimize        0 0 1000 1000
+# fix             1 all nvt temp 1e-20 1e-20 100.0
+# run             10000

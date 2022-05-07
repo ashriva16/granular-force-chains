@@ -1,0 +1,63 @@
+# Domain define
+boundary        p m p
+dimension 	    2
+atom_style      sphere
+units           lj
+lattice         sq 1
+region		    box block -10 10 -10 15 -1.5 1.5 units box
+atom_modify     map     array
+neighbor        2.0 nsq
+create_box      3 box
+# mass	        * 1.0
+group           mobile type 1 2
+fix		        gravity_ mobile gravity 10 spherical 0.0 180.0
+
+# boundary
+# region          wall block -10 10 -10 -10 0.0 0.0 units box
+# create_atoms	3 region wall
+# group	        boundary region wall
+# fix             2 boundary freeze
+# fix	            2 boundary setforce 0.0 0.0 0.0
+# fix 	        wall all wall/gran/region hooke 1e5 NULL 100.0 NULL 0.5 0 region box
+# fix 	        wall all wall/gran hooke 1e5 NULL 0.0 NULL 0 1 yplane -10.0 NULL
+fix             wall all wall/lj126 ylo -9.0 1.0 1.0 1.0 units box
+fix_modify      wall energy yes
+
+create_atoms    1 single 0 0 0 units box
+create_atoms    2 single 2.7 0 0 units box
+# mass            1       12.011
+# mass            2       12.011
+pair_style      lj/cut 1
+pair_coeff      *2 *2 1.0 1.0
+pair_coeff      *2 3 1.0 1.0
+pair_coeff      3 3 0.0 0.0
+group           myatom type 2
+velocity        myatom set 0.0 -50.0 0 units box
+variable        dimerdistance equal x[2]-x[1]
+
+# Setup output
+thermo          1
+thermo_modify   lost ignore norm no
+# fix_modify      gravity_ energy yes
+
+compute         1 all pressure thermo_temp
+compute	        Rke all erotate/sphere
+compute         TKe all ke
+compute         Pe all pe
+variable        E  equal c_TKe+c_Pe+c_Rke
+compute         c1 all ke/atom
+compute         c2 all pe/atom
+compute         sys_pe all pe
+variable        ke atom "vx*vx+vy*vy+vz*vz"
+variable        t equal "step*dt"
+
+thermo_style    custom atoms v_dimerdistance v_t step temp pe ke etotal ecouple econserve f_wall[1] f_wall[0]
+dump   	        1 all custom 1 gran_energy.du id type x y z radius vx vy vz fx fy fz c_c1 c_c2 
+
+fix 	        2d  all enforce2d
+fix             11 all nve
+
+variable        tstep equal  .0001
+variable        rstep equal .5/${tstep}
+timestep        ${tstep}
+run             ${rstep}

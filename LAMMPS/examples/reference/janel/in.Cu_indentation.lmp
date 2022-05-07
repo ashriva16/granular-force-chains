@@ -1,0 +1,39 @@
+units            metal
+echo		 both
+atom_style       atomic
+dimension	 3
+boundary         p s p
+region           box block 0 140 0 100 0 140  units box
+create_box	 1 box
+lattice 	 fcc 3.61
+region           cu block 0 140 0 100  0 140 units box
+create_atoms     1 region cu units box
+timestep         0.002
+pair_style       eam/alloy
+pair_coeff	 * * Cu_zhou.eam.alloy Cu 
+# Energy Minimization
+minimize         1.0e-4 1.0e-5 10000 10000
+# rigid boundary
+region     1 block 0 140 0 25 0 140 units box
+group      anvil1 region 1
+region     2 block 0 25 0 100 0 140 units box
+group      anvil2 region 2
+region     3 block 115 140 0 100 0 140 units box
+group      anvil3 region 3
+group      anvil union anvil1 anvil2 anvil3
+group      mobile subtract all anvil
+dump       1 all atom 1000 dump.indent8_3d_unload.dump.lammpstrj
+log log5050_indent8_3d_voidless_unload.dat
+# initial velocities
+compute	   new mobile temp
+velocity   mobile create 300 482748 temp new
+fix	   1 mobile  nvt temp 10.0  1.0 0.05
+fix	   2 anvil setforce 0.0 0.0 0.0
+# assigning velocity to the indenter in y direction/loading direction
+variable   y equal "135-step*dt*0.1"
+print      "y is $y" 
+# indenter position and radius at onset of loading
+fix	   	4 mobile indent 1000.0 sphere 70 v_y 70 30.0 units box
+thermo	   	100
+thermo_style    custom step temp  v_y f_4[1] f_4[2] f_4[3] 
+run	   	7500

@@ -1,0 +1,363 @@
+LAMMPS (10 Mar 2021)
+## Defining global variables -----------------------------------------------------
+variable	seed equal 5008
+variable	tstep equal  .0001
+variable	rstep equal 10/${tstep}
+variable	rstep equal 10/0.0001
+variable	savestep equal 1/${tstep}
+variable	savestep equal 1/0.0001
+variable	F equal 0
+variable   	n equal  50  # Total number will be NXN
+variable   	TN equal ${n}*${n}
+variable   	TN equal 50*${n}
+variable   	TN equal 50*50
+variable 	r2step equal ${rstep}
+variable 	r2step equal 100000
+
+# For LJ Potentials
+variable	gamma_rep equal 12 # ${M}  # ideally 12
+variable	gamma_att equal 0  # ${N}  # ideally 6
+variable    disorder equal ${D}
+variable    disorder equal 0
+variable	sigma_a equal  1+${disorder}
+variable	sigma_a equal  1+0
+variable    sigma_b equal  1-${disorder}
+variable    sigma_b equal  1-0
+variable    sigma_ab equal  (${sigma_a}+${sigma_b})/2
+variable    sigma_ab equal  (1+${sigma_b})/2
+variable    sigma_ab equal  (1+1)/2
+variable    sigma_3b equal  (1+${sigma_b})/2
+variable    sigma_3b equal  (1+1)/2
+variable    sigma_3a equal  (1+${sigma_a})/2
+variable    sigma_3a equal  (1+1)/2
+variable    alpha equal  1
+variable 	r_cut_a equal ${sigma_a}*${alpha}
+variable 	r_cut_a equal 1*${alpha}
+variable 	r_cut_a equal 1*1
+variable 	r_cut_b equal ${sigma_b}*${alpha}
+variable 	r_cut_b equal 1*${alpha}
+variable 	r_cut_b equal 1*1
+variable 	r_cut_ab equal (${r_cut_a}+${r_cut_b})/2
+variable 	r_cut_ab equal (1+${r_cut_b})/2
+variable 	r_cut_ab equal (1+1)/2
+variable 	r_cut_ab equal ${sigma_ab}*${alpha}
+variable 	r_cut_ab equal 1*${alpha}
+variable 	r_cut_ab equal 1*1
+variable 	r_cut_3b equal ${sigma_3b}*${alpha}
+variable 	r_cut_3b equal 1*${alpha}
+variable 	r_cut_3b equal 1*1
+variable 	r_cut_3a equal ${sigma_3a}*${alpha}
+variable 	r_cut_3a equal 1*${alpha}
+variable 	r_cut_3a equal 1*1
+# dia_a , dia_b are the minimium positions
+if "${alpha} <= 1.12" then "variable dia_a equal ${sigma_a}*${alpha}" else "variable dia_a equal ${sigma_a}*1.12"
+variable dia_a equal ${sigma_a}*${alpha}
+variable dia_a equal 1*${alpha}
+variable dia_a equal 1*1
+if "${alpha} <= 1.12" then "variable dia_b equal ${sigma_b}*${alpha}" else "variable dia_b equal ${sigma_b}*1.12"
+variable dia_b equal ${sigma_b}*${alpha}
+variable dia_b equal 1*${alpha}
+variable dia_b equal 1*1
+variable 	a equal  ${dia_a}
+variable 	a equal  1
+variable 	c equal  2/(sqrt(3)*($a^2))
+variable 	c equal  2/(sqrt(3)*(1^2))
+variable   	lx equal ($n)*$a
+variable   	lx equal (50)*$a
+variable   	lx equal (50)*1
+variable	Level equal (2*${n}^2)/(2*${n}-1)  # Even number of levels
+variable	Level equal (2*50^2)/(2*${n}-1)  
+variable	Level equal (2*50^2)/(2*50-1)  
+variable   	ily equal ${a}*(${Level}-1)*sqrt(3)/2
+variable   	ily equal 1*(${Level}-1)*sqrt(3)/2
+variable   	ily equal 1*(50.5050505050505-1)*sqrt(3)/2
+## --------------------------------------------------------------------------------
+
+## Define Domain ------------------------------------------------------------------
+units lj
+dimension 	2
+atom_style	sphere
+boundary    p fm p	# When force constrolled indenter is applied
+variable	sw equal 2*${ily}
+variable	sw equal 2*42.8726313530054
+variable	lx1 equal ${lx}
+variable	lx1 equal 50
+region		box block 0 50 0 ${sw} -.5 .5 units box
+region		box block 0 50 0 85.7452627060108 -.5 .5 units box
+newton   	off
+comm_modify    vel yes
+neighbor    0.2 bin
+### delay or every or check or once or cluster or include or exclude or page or one or binsize
+neigh_modify    delay 0
+### create the simulation box with one type of particle, based on the specified region.
+### Thus a region command must first be used to define a geometric domain.
+create_box 3 box
+Created orthogonal box = (0.0000000 0.0000000 -0.50000000) to (50.000000 85.745263 0.50000000)
+  2 by 2 by 1 MPI processor grid
+
+variable lo equal xlo
+variable hi equal xhi
+fix 	ylower all wall/gran hooke 1e5 0 0 0 0 0 yplane 0.0 NULL
+
+## Inserting particles -----------------------------------------------------------
+### Lattice stucture
+lattice 		hex ${c}
+lattice 		hex 1.15470053837925
+Lattice spacing in x,y,z = 1.0000000 1.7320508 1.0000000
+region 			slab block 0 50 0.5 ${ily} -0.5 0.5 units box
+region 			slab block 0 50 0.5 42.8726313530054 -0.5 0.5 units box
+# lattice 	    hex ${c} origin 0.5 0.8 0.0
+# region          slab block 0.0 ${lx1} 0.0 ${ily} -.5 .5 units box
+create_atoms    1 region slab units box
+Created 2450 atoms
+  create_atoms CPU = 0.002 seconds
+
+### Random Insertion (Settle time needs to be increased)
+# create_atoms    1 random ${TN} ${seed} box
+
+### Random Pour
+# region    INslab block 1 ${lx} ${ly} ${ily} -.5 .5 units box
+# fix       ins all pour 100 1 ${seed} vol 1 100 diam one ${dia1} region INslab vel -10 10 0 rate 0.0
+group 			mobile type 1
+2450 atoms in group mobile
+set				group mobile type/fraction 2 ${F} 12345
+set				group mobile type/fraction 2 0 12345
+Setting atom values ...
+  0 settings made for type/fraction
+set             type 1 diameter ${dia_a}
+set             type 1 diameter 1
+Setting atom values ...
+  2450 settings made for diameter
+set             type 2 diameter ${dia_b}
+set             type 2 diameter 1
+Setting atom values ...
+  0 settings made for diameter
+## --------------------------------------------------------------------------------
+
+## Particle Interaction Functions -------------------------------------------------
+# pair_style    	mie/cut 1
+# pair_coeff    	1 1 1.0 ${sigma_a} ${gamma_rep} ${gamma_att} ${r_cut_a}
+# pair_coeff    	2 2 1.0 ${sigma_b} ${gamma_rep} ${gamma_att} ${r_cut_b}
+# pair_coeff    	1 2 1.0 1 ${gamma_rep} ${gamma_att} 1
+# pair_coeff    	1 3 1.0 1 ${gamma_rep} ${gamma_att} 1
+# pair_coeff    	2 3 1.0 1 ${gamma_rep} ${gamma_att} 1
+# pair_coeff    	3 3 1.0 0 ${gamma_rep} ${gamma_att} 1
+# pair_style    mie/cut ${r_cut_a}
+# pair_coeff    1 1 1.0 ${sigma_a} ${gamma_rep} ${gamma_att}
+# pair_coeff    2 2 1.0 ${sigma_b} ${gamma_rep} ${gamma_att}
+# pair_coeff    1 2 1.0 1 ${gamma_rep} ${gamma_att}
+# pair_coeff    3 * 1.0 1 12 0
+# pair_modify   shift yes
+
+# potentials functions
+pair_style      lj/cut 1
+pair_coeff      1 1 1.0 ${sigma_a} ${r_cut_a}
+pair_coeff      1 1 1.0 1 ${r_cut_a}
+pair_coeff      1 1 1.0 1 1
+pair_coeff      2 2 1.0 ${sigma_b} ${r_cut_b}
+pair_coeff      2 2 1.0 1 ${r_cut_b}
+pair_coeff      2 2 1.0 1 1
+pair_coeff      1 2 1.0 ${sigma_ab} ${r_cut_ab}
+pair_coeff      1 2 1.0 1 ${r_cut_ab}
+pair_coeff      1 2 1.0 1 1
+pair_coeff      3 * 1.0 1 1
+# pair_coeff  	1 3 1.0 ${sigma_3a} ${r_cut_3a}
+# pair_coeff  	2 3 1.0 ${sigma_3b} ${r_cut_3b}
+pair_modify     shift yes
+
+## Impose an additional acceleration on each particle in the group. (180 for -y direction)
+# fix		gravity_ all gravity 10 spherical 0.0 180.0
+# fix_modify gravity_ energy yes
+## -------------------------------------------------------------------------------
+# Specify simulation tpye
+fix 	2d  all enforce2d
+timestep	${tstep}
+timestep	0.0001
+
+## Output Setup -------------------------------------------------------------------
+variable        t equal "step*dt"
+thermo	        ${savestep}
+thermo	        10000
+# pe is per atom in thermo
+thermo_style 	custom atoms v_t step pe ke etotal lx ly lz press
+# thermo_style    custom atoms v_t step temp pe ke etotal ecouple econserve xlo xhi ylo yhi
+# thermo_modify   lost ignore
+compute         c1 all ke/atom
+compute         c2 all pe/atom
+compute         3 mobile stress/atom NULL
+compute         1 mobile property/local patom1 patom2 ptype1 ptype2
+compute 	    2 mobile pair/local dist eng fx fy fz #p1 p2 p3
+dump   	        1 mobile custom ${savestep} visualize.du 								id type radius 								x y z 								vx vy vz 								fx fy fz 								c_c1 c_c2 								c_3[1] c_3[2] c_3[3] c_3[4] c_3[5] c_3[6]
+dump   	        1 mobile custom 10000 visualize.du 								id type radius 								x y z 								vx vy vz 								fx fy fz 								c_c1 c_c2 								c_3[1] c_3[2] c_3[3] c_3[4] c_3[5] c_3[6]
+dump 	        2 mobile local ${savestep} dump.neigh index c_1[1] c_1[2] 										            c_2[1] c_2[2] 										            c_2[3] c_2[4] c_2[5]
+dump 	        2 mobile local 10000 dump.neigh index c_1[1] c_1[2] 										            c_2[1] c_2[2] 										            c_2[3] c_2[4] c_2[5]
+
+## -------------------------------------------------------------------------------
+# Relaxation
+# fix 			nve_int all nve/sphere
+# fix 			damp all langevin 0 0 1.0 699483
+# run 			${rstep}
+
+reset_timestep	0
+fix             relax all box/relax x 0 vmax .001
+minimize		0  0  100000  100000
+Neighbor list info ...
+  update every 1 steps, delay 0 steps, check yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 1.2
+  ghost atom cutoff = 1.2
+  binsize = 0.6, bins = 84 143 2
+  3 neighbor lists, perpetual/occasional/extra = 1 2 0
+  (1) pair lj/cut, perpetual
+      attributes: half, newton off
+      pair build: half/bin/newtoff
+      stencil: half/bin/2d/newtoff
+      bin: standard
+  (2) compute property/local, occasional, copy from (1)
+      attributes: half, newton off
+      pair build: copy
+      stencil: none
+      bin: none
+  (3) compute pair/local, occasional, copy from (1)
+      attributes: half, newton off
+      pair build: copy
+      stencil: none
+      bin: none
+Per MPI rank memory allocation (min/avg/max) = 8.580 | 9.963 | 11.35 Mbytes
+Atoms v_t Step PotEng KinEng TotEng Lx Ly Lz Press 
+    2450            0        0 5.3806755e-14            0 5.3806755e-14           50    85.745263            1    5.7967051 
+    2450       0.0001        1 5.3806755e-14            0 5.3806755e-14           50    85.745263            1    5.7967051 
+Loop time of 0.00893497 on 4 procs for 1 steps with 2450 atoms
+
+99.3% CPU use with 4 MPI tasks x no OpenMP threads
+
+Minimization stats:
+  Stopping criterion = quadratic factors are zero
+  Energy initial, next-to-last, final = 
+    5.3806754969948e-14 5.3806754969948e-14 5.3806754969948e-14
+  Force two-norm initial, final = 13401.615 13401.615
+  Force max component initial, final = 13308.000 13308.000
+  Final line search alpha, max atom move = 7.5142771e-08 0.0010000000
+  Iterations, force evaluations = 1 2
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 7.1526e-07 | 7.4625e-05 | 0.00015116 |   0.0 |  0.84
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 3.7432e-05 | 4.0472e-05 | 4.3631e-05 |   0.0 |  0.45
+Output  | 0          | 0          | 0          |   0.0 |  0.00
+Modify  | 7.1526e-07 | 1.1563e-05 | 2.265e-05  |   0.0 |  0.13
+Other   |            | 0.008808   |            |       | 98.58
+
+Nlocal:        612.500 ave        1225 max           0 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Nghost:        74.5000 ave         122 max          27 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Neighs:        1861.00 ave        3722 max           0 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+
+Total # of neighbors = 7444
+Ave neighs/atom = 3.0383673
+Neighbor list builds = 0
+Dangerous builds = 0
+unfix 	        relax
+# unfix 2d
+## Indenter Setup ----------------------------------------------------------------
+reset_timestep	0
+fix 			nve_int all nve/sphere
+# fix 			damp all langevin 0 0 .1 699483
+run ${rstep}
+run 100000
+Per MPI rank memory allocation (min/avg/max) = 7.455 | 8.838 | 10.22 Mbytes
+Atoms v_t Step PotEng KinEng TotEng Lx Ly Lz Press 
+    2450            0        0 5.3806755e-14            0 5.3806755e-14           50    85.745263            1    5.7967051 
+    2450            1    10000 0.00034377645 0.00099947368 0.0013432501           50    85.745263            1    3.0000557 
+    2450            2    20000 0.00029287258 0.0016928387 0.0019857112           50    85.745263            1    1.9925542 
+    2450            3    30000 8.2888955e-05   0.00223219  0.002315079           50    85.745263            1   0.55030355 
+    2450            4    40000 0.00019824716 0.0022543205 0.0024525676           50    85.745263            1   0.43055205 
+    2450            5    50000 0.00016122863 0.0023694186 0.0025306473           50    85.745263            1   0.42483008 
+    2450            6    60000 4.4481139e-05 0.0025625014 0.0026069826           50    85.745263            1   0.22001418 
+    2450            7    70000 1.9879474e-05 0.0026484903 0.0026683698           50    85.745263            1   0.15835908 
+    2450            8    80000 4.3080444e-06 0.0026994309 0.0027037389           50    85.745263            1  0.046348587 
+    2450            9    90000 4.0708343e-06 0.0027207274 0.0027247982           50    85.745263            1  0.032364594 
+    2450           10   100000 5.9517837e-07 0.0027408663 0.0027414615           50    85.745263            1  0.018363288 
+Loop time of 6.37542 on 4 procs for 100000 steps with 2450 atoms
+
+Performance: 135520.580 tau/day, 15685.252 timesteps/s
+98.0% CPU use with 4 MPI tasks x no OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 0.028644   | 0.95889    | 1.9062     |  94.9 | 15.04
+Neigh   | 0.00022674 | 0.0018461  | 0.003552   |   3.8 |  0.03
+Comm    | 0.61602    | 0.65747    | 0.69635    |   3.8 | 10.31
+Output  | 0.068402   | 0.068689   | 0.068934   |   0.1 |  1.08
+Modify  | 0.064675   | 1.5594     | 3.0905     | 119.5 | 24.46
+Other   |            | 3.129      |            |       | 49.08
+
+Nlocal:        612.500 ave        1191 max          40 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Nghost:        97.7500 ave         162 max          41 min
+Histogram: 2 0 0 0 0 0 0 0 1 1
+Neighs:        1825.75 ave        3547 max         101 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+
+Total # of neighbors = 7303
+Ave neighs/atom = 2.9808163
+Neighbor list builds = 23
+Dangerous builds = 0
+# variable      	cch equal ${ily}+2
+# variable      	ccl equal ${ily}+1
+# variable      	xh equal xhi
+# variable      	xl equal xlo
+
+# lattice 	    sq 4 origin .5 0 0
+# region          indenter block ${xl} ${xh} ${ccl} ${cch} -.5 .5 units box
+# # region          indenter block 0.5 ${lx1} ${y0} ${y1} -.5 .5 units box
+# create_atoms	3 region indenter
+# set         	type 3 diameter 1
+# group			pressure region indenter
+# fix             31 pressure rigid single torque * off off off
+# fix 			2d  all enforce2d
+# fix				3 pressure setforce 0.0 NULL 0.0
+
+# fix				4 pressure addforce 0.0 -1 0.0
+# fix_modify      4 energy yes
+# run				${rstep}
+
+# unfix damp
+# fix 			damp all langevin 0 0 .1 699483
+# run 			${rstep}
+
+# unfix damp
+# fix 			damp all langevin 0 0 .01 699483
+# run 			${rstep}
+
+# unfix damp
+# fix 			damp all langevin 0 0 .001 699483
+# run 			${rstep}
+
+# unfix damp
+# fix 			damp all langevin 0 0 .0001 699483
+# run 			${rstep}
+
+# # fix				5 pressure addforce 0.0 -1 0.0
+# # fix_modify      5 energy yes
+# # run				${rstep}
+
+# # fix				6 pressure addforce 0.0 -1 0.0
+# # fix_modify      6 energy yes
+# # run				${rstep}
+
+# # fix				7 pressure addforce 0.0 -1 0.0
+# # fix_modify      7 energy yes
+# # run				${rstep}
+
+# # reset_timestep	0
+
+# # unfix 			nve_int
+# # fix				nvt_int mobile nvt temp 1e-50 1e-50 1.0
+# # run 			${r2step}
+Total wall time: 0:00:06

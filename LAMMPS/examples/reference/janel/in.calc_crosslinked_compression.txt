@@ -1,0 +1,135 @@
+# Compression of PN
+
+# ------------------------ INITIALIZATION ----------------------------
+units 		real
+dimension	3
+boundary	p	p	p
+variable 	fname index 75_CL.data
+variable	simname index crosslinkedFILE_compression
+log		log.${simname}.txt
+
+
+
+# ------------------------ FORCE FIELDS ------------------------------
+atom_style	full
+bond_style	harmonic
+angle_style	harmonic
+dihedral_style	harmonic
+pair_style	lj/cut/coul/cut 10
+#pair_style	lj/long/coul/long cut long 10
+#kspace_style 	pppm/disp 1.0e-4
+improper_style	cvff
+neighbor	3 bin
+neigh_modify	delay 0 every 1 check yes one 10000
+
+# ----------------------- ATOM DEFINITION ----------------------------
+read_data	${fname}
+#replicate	1 1 1
+
+# ------------------------- SETTINGS ---------------------------------
+compute csym all centro/atom fcc 
+compute peratom all pe/atom 
+compute eng all pe/atom 
+compute eatoms all reduce sum c_eng
+
+# ---------- Run Minimization --------------------- 
+reset_timestep 0 
+fix 1 all box/relax iso 0.0 vmax 0.001
+dump 		1 all atom 100 Min.lammpstrj 
+thermo 100 
+thermo_style custom step pe lx ly lz press pxx pyy pzz c_eatoms 
+min_style cg 
+minimize 1e-25 1e-25 10000 10000 
+unfix 	1
+undump 	1
+
+######################################
+# EQUILIBRATION
+reset_timestep	0
+timestep 0.05 # timestep = 0.01 femto-second
+
+compute	   new2 all temp
+velocity   all create 300 482748 temp new2
+fix 1 all npt temp 300 300 1 iso 1 1 1 drag 1
+dump 		2 all atom 250 nptEquilibration.lammpstrj 
+
+# Set thermo output
+thermo 100
+thermo_style custom step lx ly lz press pxx pyy pzz pe temp
+
+# Run for at least 10 picosecond (assuming 1 fs timestep)
+run 20000 # 1000000 This is 20 femtosecond # you have to equilibrate it till the structure stops moving
+unfix	1
+undump	2
+
+# Store final cell length for strain calculations
+variable tmp equal "lx"
+variable L0 equal ${tmp}
+print "Initial Length, L0: ${L0}"
+
+write_data result.data
+######################################
+# DEFORMATION
+reset_timestep	0
+
+#timestep 0.001 # timestep = 1 atto-second
+#timestep 0.01 # timestep = 1 femto-second should be 1 if you want to run 99000
+timestep 0.001 # timestep = 0.01 femto-second should be 0.01 if you want to run 99000
+#timestep 0.01 # should be 0.1 if you want to run 99000
+#timestep 0.0005 
+#timestep 0.00125
+#timestep 0.002
+#timestep 0.005
+
+fix		1 all npt temp 300 300 1 y 0 0 1 z 0 0 1 drag 1
+#variable srate equal 1.0e13 # strain rate: 10^13/s
+#variable srate equal 1.0e10
+variable srate equal 1.0e12
+#variable srate equal 1.0e11
+#variable srate equal 2.0e13
+#variable srate equal 8.0e12
+#variable srate equal 5.0e11
+#variable srate equal 2.0e11
+
+variable srate1 equal "-v_srate / 1.0e15" # making it 1.0e13/s
+fix		2 all deform 1 x erate ${srate1} units box remap x # ?engineering strain rate: 1.0e13/s
+
+# Output strain and stress info to file
+# for units real, pressure is in 1 [atm] = 98066.5 [Pa] = 0.0000980665 [GPa]
+# p2, p3, p4 are in GPa
+variable strain equal "(lx - v_L0)/v_L0"
+variable p1 equal "v_strain"
+variable p2 equal "-pxx*0.0000980665"
+variable p3 equal "-pyy*0.0000980665"
+variable p4 equal "-pzz*0.0000980665"
+fix def1 all print 1000 "${p1} ${p2} ${p3} ${p4}" file realPN_comp_100.def1.txt screen no # should be 100
+
+# Use cfg for AtomEye
+dump 		3 all atom 500 Compression.lammpstrj 
+
+
+# Display thermo
+thermo 	1000
+thermo_style	custom step v_strain temp v_p2 v_p3 v_p4 ke pe press
+
+run		990000 # should be 99000 means up to 0.99 strain Fix this value to control how long the simulation takes to run
+undump 3
+######################################
+# SIMULATION DONE
+print "All done"
+
+# You should be getting around 0.001GPa.... this fits experimental data
+# Strain rate: 10^13/s
+# timestep: 1 atto-second
+# run: 99000 99 femto-second
+
+# Strain rate: 10^10/s
+# timestep: 1 femto-second
+# run: 99000 99 pico-second
+# OR timestep 0.01 femto-second
+# run: 9900000 
+
+# Strain rate: 10^11/s
+# timestep: 0.1 femto-second
+# run: 99000 99 pico-second
+

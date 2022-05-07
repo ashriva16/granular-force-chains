@@ -1,0 +1,55 @@
+# pouring spheres into container box
+# Ankit
+units		lj
+atom_style      sphere
+boundary        p p fm
+dimension	3
+#newton   	 off
+comm_modify     vel yes
+
+region          box block 0 15 0 15 -.5 26 units box
+create_box      1 box
+
+pair_style	 gran/hertz/history 200000.0 57142.86 50.0 NULL 3 1
+pair_coeff	* *
+
+neighbor	0.2 bin
+neigh_modify	delay 0 every 1 check yes
+
+fix             2 all nve/sphere
+fix		30 all gravity 1.0 vector 0 0 -1
+
+# Inserting particles
+#region   slab block 0 5 0 5 0 10 units box
+#fix      ins all pour 200 1 4767548 vol 1 10 diam one 1.0 region slab
+lattice		fcc 0.8442
+region		slab block 0.0 15.0 0.0 15.0 22.0 24.0 units box
+create_atoms	1 region slab
+
+
+# Inserting Wall
+fix       zlower all wall/gran granular hertz 1000.0 50.0 tangential mindlin 1000.0 1.0 0.4 zplane 0 1 
+
+timestep	0.001
+
+run      100000
+
+compute      1 all erotate/sphere
+compute      2 all property/local patom1 patom2
+compute      3 all pair/local fx fy fz p1 p2 p3
+
+dump     1 all image 100 *.png type type
+
+dump      2 all local 10000 dump.force0 index c_2[1] c_2[2] &
+          c_3[1] c_3[2] c_3[3]
+#dump      3 all custom 100000 dump.position0 id x y z diameter
+
+dump      4 all atom 100 need.lammpstrj
+dump      30 all custom 100 tc.dump id type x y fx fy fz
+
+#lattice		fcc 0.8442
+region		slab2 block 0.0 15.0 0.0 15.0 22.0 24.0 units box
+create_atoms	1 region slab2
+group	pressure region slab2
+fix		10 pressure setforce 0.0 0.0 NULL
+run		100000

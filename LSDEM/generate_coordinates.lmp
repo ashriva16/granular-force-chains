@@ -1,0 +1,29 @@
+variable        dia1 equal 20
+variable        dia2 equal 20
+variable   	    n equal  100  # Total number will be NXN
+variable        numRow equal 10
+variable        numCol equal ($n/${numRow})
+
+# variable        
+variable   	    a equal 1/400
+variable   	    lx equal (${numCol}+1)*${dia1}
+variable   	    ly equal (${numRow})*${dia1}
+variable        c equal  2/(sqrt(3)*(${dia1}^2))
+
+dimension 	    2
+units           lj
+atom_style	    sphere
+region		    box block 0 ${lx} 0 ${ly} -1.5 1.5 units box
+create_box      1 box
+
+### Lattice stucture
+lattice 	    hex ${c} origin 0.5 0.8 0.0
+region          slab block 0.0 ${lx} 0.0 ${ly} -.5 .5 units box
+
+# lattice 	    sq $a origin 0.5 0.5 0.0
+# region          slab block 0.0 ${lx} 0.0 ${ly} -.5 .5 units box
+create_atoms    1 region slab
+set             type 1 diameter ${dia1}
+
+dump   	        1 all custom 10 coord.du id radius x y z
+run 1

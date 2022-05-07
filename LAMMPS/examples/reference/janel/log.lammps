@@ -1,0 +1,89 @@
+LAMMPS (10 Mar 2021)
+units            metal
+echo		 both
+atom_style       atomic
+dimension	 3
+boundary         p s p
+region           box block 0 140 0 100 0 140  units box
+create_box	 1 box
+Created orthogonal box = (0.0000000 0.0000000 0.0000000) to (140.00000 100.00000 140.00000)
+  2 by 1 by 2 MPI processor grid
+lattice 	 fcc 3.61
+Lattice spacing in x,y,z = 3.6100000 3.6100000 3.6100000
+region           cu block 0 140 0 100  0 140 units box
+create_atoms     1 region cu units box
+Created 170352 atoms
+  create_atoms CPU = 0.006 seconds
+timestep         0.002
+pair_style       eam/alloy
+pair_coeff	 * * Cu_zhou.eam.alloy Cu
+Reading eam/alloy potential file Cu_zhou.eam.alloy with DATE: 2007-10-12
+# Energy Minimization
+minimize         1.0e-4 1.0e-5 10000 10000
+WARNING: Using 'neigh_modify every 1 delay 0 check yes' setting during minimization (../min.cpp:188)
+Neighbor list info ...
+  update every 1 steps, delay 0 steps, check yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 11.0375
+  ghost atom cutoff = 11.0375
+  binsize = 5.51875, bins = 26 19 26
+  1 neighbor lists, perpetual/occasional/extra = 1 0 0
+  (1) pair eam/alloy, perpetual
+      attributes: half, newton on
+      pair build: half/bin/atomonly/newton
+      stencil: half/bin/3d/newton
+      bin: standard
+Per MPI rank memory allocation (min/avg/max) = 57.59 | 58.20 | 58.76 Mbytes
+Step Temp E_pair E_mol TotEng Press Volume 
+       0            0   -591696.61            0   -591696.61    33167.106      1946182 
+      11            0   -598860.13            0   -598860.13    18611.439      1946182 
+Loop time of 4.50963 on 4 procs for 11 steps with 170352 atoms
+
+99.9% CPU use with 4 MPI tasks x no OpenMP threads
+
+Minimization stats:
+  Stopping criterion = energy tolerance
+  Energy initial, next-to-last, final = 
+     -591696.608355047   -598832.34943799   -598860.13409911
+  Force two-norm initial, final = 515.89175 17.715493
+  Force max component initial, final = 19.151669 0.52817633
+  Final line search alpha, max atom move = 0.19201755 0.10141913
+  Iterations, force evaluations = 11 13
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 4.2913     | 4.3542     | 4.3911     |   1.9 | 96.55
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0.080479   | 0.11734    | 0.18029    |  11.7 |  2.60
+Output  | 0          | 0          | 0          |   0.0 |  0.00
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Other   |            | 0.03804    |            |       |  0.84
+
+Nlocal:        42588.0 ave       42588 max       42588 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Nghost:        31675.0 ave       33124 max       30240 min
+Histogram: 1 0 0 0 2 0 0 0 0 1
+Neighs:    9.50244e+06 ave 9.63776e+06 max 9.36682e+06 min
+Histogram: 1 1 0 0 0 0 0 0 1 1
+
+Total # of neighbors = 38009740
+Ave neighs/atom = 223.12471
+Neighbor list builds = 0
+Dangerous builds = 0
+# rigid boundary
+region     1 block 0 140 0 25 0 140 units box
+group      anvil1 region 1
+39546 atoms in group anvil1
+region     2 block 0 25 0 100 0 140 units box
+group      anvil2 region 2
+30030 atoms in group anvil2
+region     3 block 115 140 0 100 0 140 units box
+group      anvil3 region 3
+30030 atoms in group anvil3
+group      anvil union anvil1 anvil2 anvil3
+85410 atoms in group anvil
+group      mobile subtract all anvil
+84942 atoms in group mobile
+dump       1 all atom 1000 dump.indent8_3d_unload.dump.lammpstrj
+log log5050_indent8_3d_voidless_unload.dat

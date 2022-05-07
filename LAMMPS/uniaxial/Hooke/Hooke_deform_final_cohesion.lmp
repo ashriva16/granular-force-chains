@@ -1,0 +1,123 @@
+# ## Defining global variables -----------------------------------------------------
+variable	seed equal 5008
+variable	tstep equal  .0001
+variable	rstep equal 10/${tstep}
+variable	r2step equal 50*${rstep}
+variable	savestep equal ${rstep}
+variable	F equal .5
+variable   	n equal  5  # Total number will be NXN
+variable   	TN equal ${n}*${n}
+
+# For LJ Potentials
+variable    disorder equal ${D}
+variable	sigma_a equal  1+${disorder}
+variable    sigma_b equal  1-${disorder}
+variable    sigma_ab equal  (${sigma_a}+${sigma_b})/2
+variable    alpha equal 1.1
+variable 	r_cut_a equal ${sigma_a}*${alpha}
+variable 	r_cut_b equal ${sigma_b}*${alpha}
+variable 	r_cut_ab equal ${sigma_ab}*${alpha}
+variable 	a equal  ${sigma_a}
+variable 	c equal  2/(sqrt(3)*($a^2))
+
+# 2d LJ obstacle flow
+dimension 2
+boundary p p p
+atom_style sphere
+neighbor 0.3 bin
+neigh_modify delay 5
+comm_modify    vel yes
+
+# create geometry
+lattice 		hex ${c}
+region 			box block 0 50 0 30 -0.25 0.25
+# region 			box block 0 1 0 .5 -0.25 0.25
+create_box 		2 box
+create_atoms 	1 box
+
+group 			mobile type 1
+set				group mobile type/fraction 2 ${F} 12345
+set             type 1 diameter ${sigma_a}
+set             type 2 diameter ${sigma_b}
+
+# potentials
+# pair_style		gran/hooke 1e5 NULL 1000.0 NULL 0.5 0
+# pair_style		gran/hooke 1e5 0 0 0 0.5 0
+# pair_coeff    	* *
+
+# pair_style 		python 2.5
+# pair_coeff 		* * py_pot2.customhooke lj1 lj2
+
+pair_style python 2
+pair_coeff * * py_pot2.customhooke lj1 lj2
+shell rm hooke11.table
+shell rm hooke12.table
+shell rm hooke22.table
+pair_write  1 1 2000001 r 0.00000001 ${r_cut_a} hooke11.table ENTRY1
+pair_write  1 2 2000001 r 0.00000001 ${r_cut_ab} hooke12.table ENTRY1
+pair_write  2 2 2000001 r 0.00000001 ${r_cut_b} hooke22.table ENTRY1
+pair_style table linear 2000001
+pair_coeff 1 1 hooke11.table ENTRY1
+pair_coeff 1 2 hooke12.table ENTRY1
+pair_coeff 2 2 hooke22.table ENTRY1
+
+fix 			2d  all enforce2d
+
+######################################
+# Output Setup
+variable 		strain equal "0"
+variable        t equal "step*dt"
+thermo	        ${savestep}
+compute 		myTemp all temp
+compute 		mypress all pressure myTemp virial
+variable 		p2 equal "(c_mypress[1]+c_mypress[2])/2"
+# pe is per atom in thermo
+thermo_style 	custom atoms v_t step pe ke etotal v_strain lx ly lz v_p2
+# thermo_modify   lost ignore
+compute 		csym all centro/atom 6
+compute 		peratom all pe/atom
+compute         c1 all ke/atom
+compute         c2 all pe/atom
+compute         3 all stress/atom myTemp virial
+compute         1 all property/local patom1 patom2 ptype1 ptype2
+compute 	    2 all pair/local dist eng fx fy fz #p1 p2 p3
+dump   	        1 all custom ${savestep} visualize.du &
+								id type radius &
+								x y z &
+								vx vy vz &
+								fx fy fz & 
+								c_c1 c_c2 &
+								c_3[1] c_3[2] c_3[3] c_3[4] c_3[5] c_3[6]
+dump 	        2 all local ${savestep} dump.neigh index c_1[1] c_1[2] &
+										            c_2[1] c_2[2] &
+										            c_2[3] c_2[4] c_2[5]
+
+######################################
+# EQUILIBRATION
+timestep 		${tstep}
+velocity   		all create .001 482748 temp myTemp
+fix 			_npt_ all npt temp .001 1e-10 1 iso 1 1 1 drag 1
+run 			${r2step}
+unfix			_npt_
+
+# ######################################
+variable 	tmp equal "ly"
+variable	L0 equal ${tmp}
+variable 	strain equal "100*(ly - v_L0)/v_L0"
+
+fix				_nve_ all nve/sphere
+fix				_damp_ all langevin 0 0 10 699483
+variable 		tstrain equal .005
+variable 		scale equal "(1 - v_tstrain)"
+variable 		srate equal "v_tstrain/v_r2step"
+fix				_deform_ all deform 1 y scale ${scale} remap x
+run	 			${r2step}
+unfix 			_deform_
+
+# ######################################
+# # Equilibrium After deformation
+run				${r2step}
+
+variable 		p1 equal "v_strain"
+variable 		tmp equal "ly"
+print "${srate} ${p1} ${tmp} ${L0}"
